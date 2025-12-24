@@ -9,7 +9,7 @@
 #define DEFAULT_STR_ALLOC 64
 #define MAX_STR_ALLOC 1024
 
-#define NUM_COMMAND 4
+#define NUM_COMMAND 5
 
 #define DEFAULT_NUM_ARG 8
 
@@ -78,7 +78,8 @@ const char built_in_commands[NUM_COMMAND][DEFAULT_STR_ALLOC] = {
   "exit",
   "echo",
   "type",
-  "pwd"
+  "pwd",
+  "cd"
 };
 
 /* string manipulation utilities */
@@ -223,6 +224,13 @@ int isPwd(char* cmd) {
   return 0;
 }
 
+int isCd(char* cmd) {
+  if (strcmp(cmd, "cd") == 0) {
+    return 1;
+  }
+  return 0;
+}
+
 /* critical functions */
 char* find_path_executable(char* path, char* type_arg) {
     char* save = NULL;
@@ -260,6 +268,14 @@ int run_process(struct Cmd* cmd) {
     }
     else {
         perror("fork");
+        return -1;
+    }
+    return 0;
+}
+
+int changeDir(char* destDir) {
+    if (chdir(destDir) == -1) {
+        perror("cd");
         return -1;
     }
     return 0;
@@ -352,6 +368,12 @@ int main(int argc, char *argv[]) {
             return -1;
         }
         printf("%s\n", cwd);
+      }
+      else if (isCd(exe_name)) {
+        // currently suppose argc == 2
+        if (changeDir(cmd->argv[1]) == -1) {
+            printf("cd: %s: No such file or directory\n", );
+        }
       }
     }
     free(cmd_str);
