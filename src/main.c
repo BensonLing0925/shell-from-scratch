@@ -6,6 +6,12 @@
 #define DEFAULT_STR_ALLOC 64
 #define MAX_STR_ALLOC 1024
 
+#define NUM_COMMAND 1
+
+const char commands[1][DEFAULT_STR_ALLOC] = {
+  "exit"
+};
+
 static void chomp_newline(char *s) {
   if (!s) return;
   size_t n = strlen(s);
@@ -78,7 +84,20 @@ char* readCommand(FILE* stream) {
 
 int isValidCommand(char* cmd) {
   int rt = 0;
+  for ( int i = 0 ; i < NUM_COMMAND ; i++ ) {
+    if (strcmp(cmd, commands[i]) == 0) {
+      rt = 1;
+    }
+  }
   return rt;
+}
+
+int isExit(char* cmd) {
+  if (strcmp(cmd, "exit") == 0) {
+    free(cmd);
+    return 1;
+  }
+  return 0;
 }
 
 int main(int argc, char *argv[]) {
@@ -95,6 +114,11 @@ int main(int argc, char *argv[]) {
     if (!isValidCommand(cmd)) {
       printf("%s: command not found\n", cmd);
       free(cmd);
+    }
+    else {
+      if (isExit(cmd)) {
+        break;
+      }
     }
   }
 
