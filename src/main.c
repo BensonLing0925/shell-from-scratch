@@ -274,6 +274,12 @@ int run_process(struct Cmd* cmd) {
 }
 
 int changeDir(char* destDir) {
+
+    if (strcmp(destDir, "~") == 0) {
+        destDir = getenv("HOME");
+        destDir = strdup(destDir);
+    }
+
     if (chdir(destDir) == -1) {
         // perror("cd");
         return -1;
