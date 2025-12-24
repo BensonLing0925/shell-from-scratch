@@ -86,14 +86,16 @@ int main(int argc, char *argv[]) {
   setbuf(stdout, NULL);
 
   // TODO: Uncomment the code below to pass the first stage
-  printf("$ ");
+  while (1) {
+    printf("$ ");
 
-  char* cmd = readCommand(stdin);
-  if (!cmd) return 0;
-  chomp_newline(cmd);
-  if (!isValidCommand(cmd)) {
-    printf("%s: command not found", cmd);
-    free(cmd);
+    char* cmd = readCommand(stdin);
+    if (!cmd) return 0;
+    chomp_newline(cmd);
+    if (!isValidCommand(cmd)) {
+      printf("%s: command not found\n", cmd);
+      free(cmd);
+    }
   }
 
   return 0;
