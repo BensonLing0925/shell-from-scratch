@@ -240,7 +240,7 @@ int main(int argc, char *argv[]) {
         char* type_arg = cmd->argv[1];
         if (cmd->argc >= 2) {
           if (!isValidCommand(type_arg)) {
-            printf("%s: command not found\n", type_arg);
+            printf("%s: not found\n", type_arg);
           }
           else {
             if (isBuiltinCommand(type_arg)) {
