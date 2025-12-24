@@ -244,7 +244,7 @@ int main(int argc, char *argv[]) {
           }
           else {
             if (isBuiltinCommand(type_arg)) {
-              printf("%s is a shell built-in\n", cmd->argv[1]);
+              printf("%s is a shell builtin\n", cmd->argv[1]);
             }
           }
         }
