@@ -9,7 +9,7 @@
 #define DEFAULT_STR_ALLOC 64
 #define MAX_STR_ALLOC 1024
 
-#define NUM_COMMAND 3
+#define NUM_COMMAND 4
 
 #define DEFAULT_NUM_ARG 8
 
@@ -77,7 +77,8 @@ void freeCmd(struct Cmd* cmd) {
 const char built_in_commands[NUM_COMMAND][DEFAULT_STR_ALLOC] = {
   "exit",
   "echo",
-  "type"
+  "type",
+  "pwd"
 };
 
 /* string manipulation utilities */
@@ -215,6 +216,13 @@ int isType(char* cmd) {
   return 0;
 }
 
+int isPwd(char* cmd) {
+  if (strcmp(cmd, "pwd") == 0) {
+    return 1;
+  }
+  return 0;
+}
+
 /* critical functions */
 char* find_path_executable(char* path, char* type_arg) {
     char* save = NULL;
@@ -336,6 +344,14 @@ int main(int argc, char *argv[]) {
             }
           }
         }
+      }
+      else if (isPwd(exe_name)) {
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) == NULL) {
+            perror("getcwd");
+            return -1;
+        }
+        printf("%s\n", cwd);
       }
     }
     free(cmd_str);
