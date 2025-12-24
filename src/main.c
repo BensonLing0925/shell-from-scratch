@@ -27,7 +27,7 @@ void initCmdArgv(struct Cmd* cmd);
 struct Cmd initCmd(struct Cmd* cmd) {
   cmd->argc = 0;
   cmd->argv = NULL;
-  cmd->cap = DEFAULT_STR_ALLOC;
+  cmd->cap = DEFAULT_NUM_ARG;
 }
 
 void initCmdArgv(struct Cmd* cmd) {
@@ -59,6 +59,10 @@ ssize_t cmdArgvRealloc(struct Cmd* cmd) {
   }
   else {
     cmd->argv = temp;
+    for ( int i = old_cap ; i < new_cap ; ++i ) {
+        cmd->argv[i] = NULL;
+    }
+    cmd->cap = new_cap;
   }
   return 0;
 }
@@ -131,7 +135,7 @@ ssize_t my_getline(char **lineptr, size_t *n, FILE *stream) {
         errno = ENOMEM;
         return -1;
       }
-      char* temp = realloc(*lineptr, new_cap);
+      char* temp = realloc(*lineptr, new_cap * sizeof(char*));
       if (temp == NULL) {
         errno = ENOMEM;
         return -1;
@@ -292,8 +296,8 @@ int main(int argc, char *argv[]) {
         }
         else {
             printf("%s: command not found\n", cmd_str);
+            free(path_copy);
         }
-        free(path_copy);
     }
     else {
       if (isExit(exe_name)) {
