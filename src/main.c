@@ -275,7 +275,7 @@ int run_process(struct Cmd* cmd) {
 
 int changeDir(char* destDir) {
     if (chdir(destDir) == -1) {
-        perror("cd");
+        // perror("cd");
         return -1;
     }
     return 0;
