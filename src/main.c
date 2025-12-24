@@ -206,7 +206,6 @@ int main(int argc, char *argv[]) {
     char* exe_name = cmd->argv[0];
     if (!isValidCommand(exe_name)) {
       printf("%s: command not found\n", cmd_str);
-      free(cmd_str);
     }
     else {
       if (isExit(exe_name)) {
