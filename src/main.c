@@ -6,11 +6,90 @@
 #define DEFAULT_STR_ALLOC 64
 #define MAX_STR_ALLOC 1024
 
-#define NUM_COMMAND 1
+#define NUM_COMMAND 2
 
-const char commands[1][DEFAULT_STR_ALLOC] = {
-  "exit"
+#define DEFAULT_NUM_ARG 8
+
+struct Cmd {
+  size_t argc;
+  char** argv;
+  size_t cap;
 };
+
+struct Cmd* createCmd();
+void freeCmd(struct Cmd* cmd);
+struct Cmd initCmd(struct Cmd* cmd);
+void initCmdArgv(struct Cmd* cmd);
+
+struct Cmd initCmd(struct Cmd* cmd) {
+  cmd->argc = 0;
+  cmd->argv = NULL;
+  cmd->cap = DEFAULT_STR_ALLOC;
+}
+
+void initCmdArgv(struct Cmd* cmd) {
+  cmd->argv = (char**) malloc(sizeof(char*) * DEFAULT_NUM_ARG);
+  for ( int i = 0 ; i < DEFAULT_NUM_ARG ; i++ ) {
+    cmd->argv[i] = (char*) malloc(sizeof(char) * DEFAULT_STR_ALLOC);
+  }
+}
+
+struct Cmd* createCmd() {
+  struct Cmd* cmd = (struct Cmd*)malloc(sizeof(struct Cmd));
+  initCmd(cmd);
+  return cmd;
+}
+
+// return 0 if success
+ssize_t cmdArgvRealloc(struct Cmd* cmd) {
+  size_t old_cap = cmd->cap;
+  size_t new_cap = old_cap * 2;
+  char** temp = realloc(cmd->argv, new_cap * sizeof(char*));
+  if (temp == NULL) {
+    freeCmd(cmd);
+    errno = ENOMEM;
+    return -1;
+  }
+  else {
+    cmd->argv = temp;
+    for ( int i = old_cap ; i < new_cap ; i++ ) {
+      cmd->argv[i] = (char*) malloc(sizeof(char) * DEFAULT_STR_ALLOC);
+    }
+  }
+  return 0;
+}
+
+void freeCmd(struct Cmd* cmd) {
+  for ( int i = 0 ; i < cmd->argc ; i++ ) {
+    free(cmd->argv[i]);
+  }
+  free(cmd->argv);
+}
+
+const char commands[NUM_COMMAND][DEFAULT_STR_ALLOC] = {
+  "exit",
+  "echo"
+};
+
+/* string manipulation utilities */
+
+ssize_t tokenize(char* str, const char* delim, struct Cmd* cmd) {
+  char* token = NULL;
+  token = strtok(str, delim);
+  while (token != NULL) {
+    if (cmd->argc + 1 >= cmd->cap) {    // + 1 for null terminator
+      ssize_t ret = cmdArgvRealloc(cmd);
+      if (ret != 0) {
+        freeCmd(cmd);
+        errno = ENOMEM;
+        return -1;
+      }
+    }
+    strcpy(cmd->argv[cmd->argc++], token);
+    token = strtok(NULL, delim);
+  }
+  return 0;
+}
 
 static void chomp_newline(char *s) {
   if (!s) return;
@@ -82,6 +161,8 @@ char* readCommand(FILE* stream) {
   return cmd; // caller frees
 }
 
+/* command varifications */
+
 int isValidCommand(char* cmd) {
   int rt = 0;
   for ( int i = 0 ; i < NUM_COMMAND ; i++ ) {
@@ -94,11 +175,19 @@ int isValidCommand(char* cmd) {
 
 int isExit(char* cmd) {
   if (strcmp(cmd, "exit") == 0) {
-    free(cmd);
     return 1;
   }
   return 0;
 }
+
+int isEcho(char* cmd) {
+  if (strcmp(cmd, "echo") == 0) {
+    return 1;
+  }
+  return 0;
+}
+
+/* main */
 
 int main(int argc, char *argv[]) {
   // Flush after every printf
@@ -108,18 +197,31 @@ int main(int argc, char *argv[]) {
   while (1) {
     printf("$ ");
 
-    char* cmd = readCommand(stdin);
-    if (!cmd) return 0;
-    chomp_newline(cmd);
-    if (!isValidCommand(cmd)) {
-      printf("%s: command not found\n", cmd);
-      free(cmd);
+    char* cmd_str = readCommand(stdin);
+    if (!cmd_str) return 0;
+    chomp_newline(cmd_str);
+    struct Cmd* cmd = createCmd();
+    initCmdArgv(cmd);
+    tokenize(cmd_str, " ", cmd);
+    char* exe_name = cmd->argv[0];
+    if (!isValidCommand(exe_name)) {
+      printf("%s: command not found\n", cmd_str);
+      free(cmd_str);
     }
     else {
-      if (isExit(cmd)) {
+      if (isExit(exe_name)) {
+        freeCmd(cmd);
         break;
       }
+      else if (isEcho(exe_name)) {
+        for ( int num_arg = 1 ; num_arg < cmd->argc-1 ; num_arg++ ) {
+          printf("%s ", cmd->argv[num_arg]);
+        }
+        printf("%s\n", cmd->argv[cmd->argc-1]);
+      }
     }
+    free(cmd_str);
+    freeCmd(cmd);
   }
 
   return 0;
