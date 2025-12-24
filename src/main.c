@@ -31,9 +31,13 @@ struct Cmd initCmd(struct Cmd* cmd) {
 
 void initCmdArgv(struct Cmd* cmd) {
   cmd->argv = (char**) malloc(sizeof(char*) * DEFAULT_NUM_ARG);
-  for ( int i = 0 ; i < DEFAULT_NUM_ARG ; i++ ) {
-    cmd->argv[i] = (char*) malloc(sizeof(char) * DEFAULT_STR_ALLOC);
+  for ( int i = 0 ; i < DEFAULT_STR_ALLOC ; ++i ) {
+    cmd->argv[i] = NULL;
   }
+}
+
+void CmdArgvStrMalloc(char* current_argv) {
+    current_argv = (char*)malloc(DEFAULT_STR_ALLOC);
 }
 
 struct Cmd* createCmd() {
@@ -54,15 +58,12 @@ ssize_t cmdArgvRealloc(struct Cmd* cmd) {
   }
   else {
     cmd->argv = temp;
-    for ( int i = old_cap ; i < new_cap ; i++ ) {
-      cmd->argv[i] = (char*) malloc(sizeof(char) * DEFAULT_STR_ALLOC);
-    }
   }
   return 0;
 }
 
 void freeCmd(struct Cmd* cmd) {
-  for ( int i = 0 ; i < cmd->argc ; i++ ) {
+  for ( int i = 0 ; i < cmd->argc ; ++i ) {
     free(cmd->argv[i]);
   }
   free(cmd->argv);
@@ -89,6 +90,7 @@ ssize_t tokenize(char* str, const char* delim, struct Cmd* cmd) {
         return -1;
       }
     }
+    CmdArgvStrMalloc(cmd->argv[cmd->argc]);
     strcpy(cmd->argv[cmd->argc++], token);
     token = strtok_r(NULL, delim, &save_ptr);
   }
@@ -229,6 +231,27 @@ char* find_path_executable(char* path, char* type_arg) {
     return NULL;
 }
 
+int run_process(struct Cmd* cmd) {
+    char** exe_argv = cmd->argv;
+    pid_t pid = fork();
+    // child
+    if (pid == 0) {
+        execvp(cmd->argv[0], cmd->argv);
+        perror("execvp");
+        _exit(127);
+    }
+    // parent
+    else if (pid > 0) {
+        int status;
+        waitpid(pid, &status, 0);
+    }
+    else {
+        perror("fork");
+        return -1;
+    }
+    return 0;
+}
+
 /* main */
 
 int main(int argc, char *argv[]) {
@@ -246,8 +269,30 @@ int main(int argc, char *argv[]) {
     initCmdArgv(cmd);
     tokenize(cmd_str, " ", cmd);
     char* exe_name = cmd->argv[0];
-    if (!isValidCommand(exe_name)) {
-      printf("%s: command not found\n", cmd_str);
+
+    /* get PATH */
+    char* path = getenv("PATH");
+    if (!path) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!isBuiltinCommand(exe_name)) {
+        // check if PATH can find that executable
+        char* path_copy = strdup(path);
+        if (!path_copy) {
+            errno = ENOMEM;
+            return -1;
+        }
+        char* full_path = find_path_executable(path_copy, exe_name);
+        if (full_path) {
+            run_process(cmd); 
+            free(full_path);
+        }
+        else {
+            printf("%s: command not found\n", cmd_str);
+        }
+        free(path_copy);
     }
     else {
       if (isExit(exe_name)) {
