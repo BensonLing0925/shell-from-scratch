@@ -2,6 +2,8 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
+#include <limits.h>
+#include <unistd.h>
 
 #define DEFAULT_STR_ALLOC 64
 #define MAX_STR_ALLOC 1024
@@ -76,7 +78,8 @@ const char built_in_commands[NUM_COMMAND][DEFAULT_STR_ALLOC] = {
 
 ssize_t tokenize(char* str, const char* delim, struct Cmd* cmd) {
   char* token = NULL;
-  token = strtok(str, delim);
+  char* save_ptr = NULL;
+  token = strtok_r(str, delim, &save_ptr);
   while (token != NULL) {
     if (cmd->argc + 1 >= cmd->cap) {    // + 1 for null terminator
       ssize_t ret = cmdArgvRealloc(cmd);
@@ -87,7 +90,7 @@ ssize_t tokenize(char* str, const char* delim, struct Cmd* cmd) {
       }
     }
     strcpy(cmd->argv[cmd->argc++], token);
-    token = strtok(NULL, delim);
+    token = strtok_r(NULL, delim, &save_ptr);
   }
   return 0;
 }
@@ -205,6 +208,27 @@ int isType(char* cmd) {
   return 0;
 }
 
+/* critical functions */
+char* find_path_executable(char* path, char* type_arg) {
+    char* save = NULL;
+    char* rt = NULL;
+    for ( char* dir = strtok_r(path, ":", &save) ;
+          dir ;
+          dir = strtok_r(NULL, ":", &save)) {
+
+        char full_path[PATH_MAX] = {0};
+        snprintf(full_path, sizeof(full_path), "%s/%s", dir, type_arg);
+        
+        if (access(full_path, X_OK) == 0) {
+            rt = strdup(full_path); 
+            free(path);
+            return rt;
+        }
+    }
+    free(path);
+    return NULL;
+}
+
 /* main */
 
 int main(int argc, char *argv[]) {
@@ -239,12 +263,27 @@ int main(int argc, char *argv[]) {
       else if (isType(exe_name)) {
         char* type_arg = cmd->argv[1];
         if (cmd->argc >= 2) {
-          if (!isValidCommand(type_arg)) {
-            printf("%s: not found\n", type_arg);
+          if (isBuiltinCommand(type_arg)) {
+            printf("%s is a shell builtin\n", type_arg);
           }
           else {
-            if (isBuiltinCommand(type_arg)) {
-              printf("%s is a shell builtin\n", cmd->argv[1]);
+            // try to parse PATH and find executable
+            char* path = getenv("PATH");
+            if (!path) {
+                errno = EINVAL;
+                return -1;
+            }
+            char* path_copy = strdup(path);
+            if (!path_copy) {
+                errno = ENOMEM;
+                return -1;
+            }
+            char* full_path = find_path_executable(path_copy, type_arg);
+            if (full_path) {
+                printf("%s is %s\n", type_arg, full_path);
+            }
+            else if (!isValidCommand(type_arg)) {
+                printf("%s: not found\n", type_arg);
             }
           }
         }
@@ -256,3 +295,4 @@ int main(int argc, char *argv[]) {
 
   return 0;
 }
+
