@@ -6,7 +6,7 @@
 #define DEFAULT_STR_ALLOC 64
 #define MAX_STR_ALLOC 1024
 
-#define NUM_COMMAND 2
+#define NUM_COMMAND 3
 
 #define DEFAULT_NUM_ARG 8
 
@@ -66,9 +66,10 @@ void freeCmd(struct Cmd* cmd) {
   free(cmd->argv);
 }
 
-const char commands[NUM_COMMAND][DEFAULT_STR_ALLOC] = {
+const char built_in_commands[NUM_COMMAND][DEFAULT_STR_ALLOC] = {
   "exit",
-  "echo"
+  "echo",
+  "type"
 };
 
 /* string manipulation utilities */
@@ -161,12 +162,22 @@ char* readCommand(FILE* stream) {
   return cmd; // caller frees
 }
 
-/* command varifications */
+/* command verifications */
 
 int isValidCommand(char* cmd) {
   int rt = 0;
   for ( int i = 0 ; i < NUM_COMMAND ; i++ ) {
-    if (strcmp(cmd, commands[i]) == 0) {
+    if (strcmp(cmd, built_in_commands[i]) == 0) {
+      rt = 1;
+    }
+  }
+  return rt;
+}
+
+int isBuiltinCommand(char* cmd) {
+  int rt = 0;
+  for ( int i = 0 ; i < NUM_COMMAND ; i++ ) {
+    if (strcmp(cmd, built_in_commands[i]) == 0) {
       rt = 1;
     }
   }
@@ -182,6 +193,13 @@ int isExit(char* cmd) {
 
 int isEcho(char* cmd) {
   if (strcmp(cmd, "echo") == 0) {
+    return 1;
+  }
+  return 0;
+}
+
+int isType(char* cmd) {
+  if (strcmp(cmd, "type") == 0) {
     return 1;
   }
   return 0;
@@ -217,6 +235,19 @@ int main(int argc, char *argv[]) {
           printf("%s ", cmd->argv[num_arg]);
         }
         printf("%s\n", cmd->argv[cmd->argc-1]);
+      }
+      else if (isType(exe_name)) {
+        char* type_arg = cmd->argv[1];
+        if (cmd->argc >= 2) {
+          if (!isValidCommand(type_arg)) {
+            printf("%s: command not found\n", type_arg);
+          }
+          else {
+            if (isBuiltinCommand(type_arg)) {
+              printf("%s is a shell built-in\n", cmd->argv[1]);
+            }
+          }
+        }
       }
     }
     free(cmd_str);
