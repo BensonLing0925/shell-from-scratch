@@ -296,7 +296,6 @@ int main(int argc, char *argv[]) {
         }
         else {
             printf("%s: command not found\n", cmd_str);
-            free(path_copy);
         }
     }
     else {
