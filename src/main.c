@@ -4,6 +4,7 @@
 #include <string.h>
 #include <limits.h>
 #include <unistd.h>
+#include <sys/wait.h>
 
 #define DEFAULT_STR_ALLOC 64
 #define MAX_STR_ALLOC 1024
