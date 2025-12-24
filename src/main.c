@@ -37,8 +37,8 @@ void initCmdArgv(struct Cmd* cmd) {
   }
 }
 
-void CmdArgvStrMalloc(char* current_argv) {
-    current_argv = (char*)malloc(DEFAULT_STR_ALLOC);
+void CmdArgvStrMalloc(char** current_argv) {
+    (*current_argv) = (char*)malloc(DEFAULT_STR_ALLOC);
 }
 
 struct Cmd* createCmd() {
@@ -91,7 +91,7 @@ ssize_t tokenize(char* str, const char* delim, struct Cmd* cmd) {
         return -1;
       }
     }
-    CmdArgvStrMalloc(cmd->argv[cmd->argc]);
+    CmdArgvStrMalloc(*(cmd->argv[cmd->argc]));
     strcpy(cmd->argv[cmd->argc++], token);
     token = strtok_r(NULL, delim, &save_ptr);
   }
