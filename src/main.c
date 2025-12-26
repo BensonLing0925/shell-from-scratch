@@ -133,7 +133,8 @@ ssize_t tokenize(char* str, struct Cmd* cmd) {
                 }
 
             if (str[str_index+1] == ' ') {
-                ch = str[str_index+2];
+                str_index += 2;
+                ch = str[str_index];
                 while (ch == ' ') {
                     str_index++;
                     ch = str[str_index];
