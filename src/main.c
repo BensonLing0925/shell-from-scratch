@@ -84,6 +84,72 @@ const char built_in_commands[NUM_COMMAND][DEFAULT_STR_ALLOC] = {
 
 /* string manipulation utilities */
 
+int isDelimiter(char ch) {
+    if (ch == ' ')
+        return ch;
+    return 0;
+}
+
+ssize_t tokenize(char* str, struct Cmd* cmd) {
+    int str_index = 0;
+    int token_index = 0;
+    char ch = str[str_index++];
+    char token[DEFAULT_STR_ALLOC] = {0};
+    while (ch != '\0') {
+        if (ch == ' ') {
+            if (cmd->argc + 1 >= cmd->cap) {    // + 1 for null terminator
+                ssize_t ret = cmdArgvRealloc(cmd);
+                if (ret != 0) {
+                    freeCmd(cmd);
+                    errno = ENOMEM;
+                    return -1;
+                }
+            }
+            token[token_index] = '\0';
+            token_index = 0;
+            CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
+            strcpy(cmd->argv[cmd->argc++], token);
+            memset(token, 0, sizeof(token));
+            // skip white space
+            ch = str[str_index++];
+            while (ch == ' ') {
+                ch = str[str_index++];
+            }
+            continue;
+        }
+        else if (ch == '\'') {
+            // str_index++;
+            ch = str[str_index];
+            if (ch == '\'') {
+                str_index++;
+                ch = str[str_index++];
+                continue;
+            }
+            again:
+                while (ch != '\'') {
+                    token[token_index++] = ch;
+                    str_index++;
+                    ch = str[str_index];
+                }
+            if (str[str_index+1] == '\'') {
+                str_index += 2;
+                ch = str[str_index];
+                goto again;
+            }
+            str_index++;
+            token[token_index] = '\0';
+            token_index = 0;
+        }
+        else {
+            token[token_index++] = ch;
+        }
+        ch = str[str_index++];
+    }
+    CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
+    strcpy(cmd->argv[cmd->argc++], token);
+}
+
+/*
 ssize_t tokenize(char* str, const char* delim, struct Cmd* cmd) {
   char* token = NULL;
   char* save_ptr = NULL;
@@ -103,6 +169,7 @@ ssize_t tokenize(char* str, const char* delim, struct Cmd* cmd) {
   }
   return 0;
 }
+*/
 
 static void chomp_newline(char *s) {
   if (!s) return;
@@ -302,7 +369,8 @@ int main(int argc, char *argv[]) {
     chomp_newline(cmd_str);
     struct Cmd* cmd = createCmd();
     initCmdArgv(cmd);
-    tokenize(cmd_str, " ", cmd);
+    // tokenize(cmd_str, " ", cmd);
+    tokenize(cmd_str, cmd);
     char* exe_name = cmd->argv[0];
 
     /* get PATH */
