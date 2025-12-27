@@ -108,9 +108,11 @@ ssize_t tokenize(char* str, struct Cmd* cmd) {
             }
             token[token_index] = '\0';
             token_index = 0;
-            CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
-            strcpy(cmd->argv[cmd->argc++], token);
-            memset(token, 0, sizeof(token));
+            if (!single_quote_last) {
+                CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
+                strcpy(cmd->argv[cmd->argc++], token);
+                memset(token, 0, sizeof(token));
+            }
             // skip white space
             ch = str[str_index++];
             while (ch == ' ') {
@@ -124,6 +126,7 @@ ssize_t tokenize(char* str, struct Cmd* cmd) {
             if (ch == '\'') {
                 str_index++;
                 ch = str[str_index++];
+                single_quote_last = 0;
                 continue;
             }
             again:
@@ -143,6 +146,7 @@ ssize_t tokenize(char* str, struct Cmd* cmd) {
             token_index = 0;
             CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
             strcpy(cmd->argv[cmd->argc++], token);
+            memset(token, 0, sizeof(token));
             single_quote_last = 1;
         }
         else {
