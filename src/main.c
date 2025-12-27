@@ -93,6 +93,7 @@ int isDelimiter(char ch) {
 ssize_t tokenize(char* str, struct Cmd* cmd) {
     int str_index = 0;
     int token_index = 0;
+    int single_quote_last = 0;
     char ch = str[str_index++];
     char token[DEFAULT_STR_ALLOC] = {0};
     while (ch != '\0') {
@@ -142,14 +143,17 @@ ssize_t tokenize(char* str, struct Cmd* cmd) {
             token_index = 0;
             CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
             strcpy(cmd->argv[cmd->argc++], token);
+            single_quote_last = 1;
         }
         else {
             token[token_index++] = ch;
         }
         ch = str[str_index++];
     }
-    CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
-    strcpy(cmd->argv[cmd->argc++], token);
+    if (!single_quote_last) {
+        CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
+        strcpy(cmd->argv[cmd->argc++], token);
+    }
 }
 
 static void chomp_newline(char *s) {
