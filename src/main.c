@@ -132,16 +132,6 @@ ssize_t tokenize(char* str, struct Cmd* cmd) {
                     ch = str[str_index];
                 }
 
-            if (str[str_index+1] == ' ') {
-                str_index += 2;
-                ch = str[str_index];
-                while (ch == ' ') {
-                    str_index++;
-                    ch = str[str_index];
-                }
-                if (ch == '\'')
-                    str_index--;
-            }
             if (str[str_index+1] == '\'') {
                 str_index += 2;
                 ch = str[str_index];
@@ -150,6 +140,8 @@ ssize_t tokenize(char* str, struct Cmd* cmd) {
             str_index++;
             token[token_index] = '\0';
             token_index = 0;
+            CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
+            strcpy(cmd->argv[cmd->argc++], token);
         }
         else {
             token[token_index++] = ch;
@@ -159,28 +151,6 @@ ssize_t tokenize(char* str, struct Cmd* cmd) {
     CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
     strcpy(cmd->argv[cmd->argc++], token);
 }
-
-/*
-ssize_t tokenize(char* str, const char* delim, struct Cmd* cmd) {
-  char* token = NULL;
-  char* save_ptr = NULL;
-  token = strtok_r(str, delim, &save_ptr);
-  while (token != NULL) {
-    if (cmd->argc + 1 >= cmd->cap) {    // + 1 for null terminator
-      ssize_t ret = cmdArgvRealloc(cmd);
-      if (ret != 0) {
-        freeCmd(cmd);
-        errno = ENOMEM;
-        return -1;
-      }
-    }
-    CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
-    strcpy(cmd->argv[cmd->argc++], token);
-    token = strtok_r(NULL, delim, &save_ptr);
-  }
-  return 0;
-}
-*/
 
 static void chomp_newline(char *s) {
   if (!s) return;

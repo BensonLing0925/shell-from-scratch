@@ -1,0 +1,13 @@
+git status
+git add -A
+git commit -m "Implement builtin cd and PATH lookup"
+git push
+
+# push to codecrafter:
+git remote add cc https://git.codecrafters.io/e328cbe925a7d941
+
+push to github:
+git push
+
+push to cc:
+git push cc master
