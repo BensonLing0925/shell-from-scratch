@@ -102,70 +102,77 @@ static int push_token(struct Cmd* cmd, struct arena* a,
     return 0;
 }
 
-ssize_t tokenize(char* str, struct Cmd* cmd, struct arena* a) {
-    int str_index = 0;
-    int token_index = 0;
-    int single_quote_last = 0;
-    char ch = str[str_index++];
-    char token[DEFAULT_STR_ALLOC] = {0};
-    while (ch != '\0') {
-        if (ch == ' ') {
-            if (cmd->argc + 1 >= cmd->cap) {    // + 1 for null terminator
-                int ret = cmdArgvGrow(cmd, a);
-                if (ret != 0) {
-                    return -1;
-                }
-            }
-            token[token_index] = '\0';
-            if (!single_quote_last) {
-                if (push_token(cmd, a, token, token_index) < 0) return -1;
-                memset(token, 0, sizeof(token));
-            }
-            token_index = 0;
-            // skip white space
-            ch = str[str_index++];
-            while (ch == ' ') {
-                ch = str[str_index++];
-            }
+static int emit_token(struct Cmd* cmd, struct arena* a, 
+                  char* token, int* token_index) {
+
+    if (*token_index == 0) return 0;
+    if (push_token(cmd, a, token, *token_index) < 0) // push_token should add '\0'
+        return -1;
+    *token_index = 0;
+    token[0] = '\0';
+    return 0;
+
+}
+
+ssize_t tokenize(char *str, struct Cmd *cmd, struct arena *a) {
+    int i = 0;
+    char token[DEFAULT_STR_ALLOC];
+    int n = 0;
+
+    token[0] = '\0';
+    while (str[i] != '\0') {
+        char c = str[i];
+        // 1) whitespace: end token
+        if (c == ' ') {
+            if (emit_token(cmd, a, token, &n) < 0) return -1;
+            // skip all spaces
+            do { i++; } while (str[i] == ' ');
             continue;
         }
-        else if (ch == '\'') {
-            // str_index++;
-            ch = str[str_index];
-            // if immediately have single quote afterward
-            if (ch == '\'') {
-                str_index++;
-                ch = str[str_index++];
-                single_quote_last = 0;
-                continue;
-            }
-            again:
-                while (ch != '\'') {
-                    token[token_index++] = ch;
-                    str_index++;
-                    ch = str[str_index];
+        // 2) single quote: read until closing quote (allow concatenated quotes)
+        if (c == '\'') {
+            i++; // consume opening quote
+            for (;;) {
+                // read quoted content
+                while (str[i] != '\0' && str[i] != '\'') {
+                    if (n + 1 >= DEFAULT_STR_ALLOC) { errno = EOVERFLOW; return -1; }
+                    token[n++] = str[i++];
                 }
-
-            if (str[str_index+1] == '\'') {
-                str_index += 2;
-                ch = str[str_index];
-                goto again;
+                if (str[i] == '\0') { errno = EINVAL; return -1; } // unmatched quote
+                i++; // consume closing quote
+                // if next char is another quote, concatenate
+                if (str[i] == '\'') { i++; continue; }
+                // quoted segment ended
+                break;
             }
-            str_index++;
-            token[token_index] = '\0';
-            if (push_token(cmd, a, token, token_index) < 0) return -1;
-            memset(token, 0, sizeof(token));
-            token_index = 0;
-            single_quote_last = 1;
+            // 注意：不要在這裡 emit，因為你允許 quote 後面緊接著普通字元黏在同一個 token
+            continue;
         }
-        else {
-            token[token_index++] = ch;
+        // 3) double quote: read until closing quote (allow concatenated quotes)
+        if (c == '\"') {
+            i++; // consume opening quote
+            for (;;) {
+                // read quoted content
+                while (str[i] != '\0' && str[i] != '\"') {
+                    if (n + 1 >= DEFAULT_STR_ALLOC) { errno = EOVERFLOW; return -1; }
+                    token[n++] = str[i++];
+                }
+                if (str[i] == '\0') { errno = EINVAL; return -1; } // unmatched quote
+                i++; // consume closing quote
+                // if next char is another quote, concatenate
+                if (str[i] == '\"') { i++; continue; }
+                // quoted segment ended
+                break;
+            }
+            // 注意：不要在這裡 emit，因為你允許 quote 後面緊接著普通字元黏在同一個 token
+            continue;
         }
-        ch = str[str_index++];
+        // 4) normal char
+        if (n + 1 >= DEFAULT_STR_ALLOC) { errno = EOVERFLOW; return -1; }
+        token[n++] = str[i++];
     }
-    if (!single_quote_last) {
-        if (push_token(cmd, a, token, token_index) < 0) return -1;
-    }
+    // end of input: emit last token
+    if (emit_token(cmd, a, token, &n) < 0) return -1;
     return 0;
 }
 
