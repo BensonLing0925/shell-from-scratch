@@ -155,7 +155,8 @@ ssize_t tokenize(char *str, struct Cmd *cmd, struct arena *a) {
                 // read quoted content
                 while (str[i] != '\0' && str[i] != '\"') {
                     if (n + 1 >= DEFAULT_STR_ALLOC) { errno = EOVERFLOW; return -1; }
-                    if (str[i] == '\\') i++;
+                    if (str[i] == '\\')
+                        if (str[i+1] == '\"' || str[i+1] == '\\') i++;
                     token[n++] = str[i++];
                 }
                 if (str[i] == '\0') { errno = EINVAL; return -1; } // unmatched quote
