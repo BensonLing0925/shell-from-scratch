@@ -167,7 +167,11 @@ ssize_t tokenize(char *str, struct Cmd *cmd, struct arena *a) {
             // 注意：不要在這裡 emit，因為你允許 quote 後面緊接著普通字元黏在同一個 token
             continue;
         }
-        // 4) normal char
+        // 4) backslash: read until closing quote (allow concatenated quotes)
+        if (c == '\\') {
+            i++;
+        }
+        // 5) normal char
         if (n + 1 >= DEFAULT_STR_ALLOC) { errno = EOVERFLOW; return -1; }
         token[n++] = str[i++];
     }
