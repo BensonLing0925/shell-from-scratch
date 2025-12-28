@@ -90,6 +90,8 @@ int isDelimiter(char ch) {
     return 0;
 }
 
+
+
 ssize_t tokenize(char* str, struct Cmd* cmd) {
     int str_index = 0;
     int token_index = 0;
@@ -123,6 +125,7 @@ ssize_t tokenize(char* str, struct Cmd* cmd) {
         else if (ch == '\'') {
             // str_index++;
             ch = str[str_index];
+            // if immediately have single quote afterward
             if (ch == '\'') {
                 str_index++;
                 ch = str[str_index++];
