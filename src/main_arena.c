@@ -23,57 +23,46 @@ struct Cmd {
 
 struct Cmd* createCmd();
 void freeCmd(struct Cmd* cmd);
-struct Cmd initCmd(struct Cmd* cmd);
-void initCmdArgv(struct Cmd* cmd);
+void initCmd(struct Cmd* cmd);
+void initCmdArgv(struct Cmd* cmd, struct arena* a);
 
-struct Cmd initCmd(struct Cmd* cmd) {
+void initCmd(struct Cmd* cmd) {
   cmd->argc = 0;
   cmd->argv = NULL;
   cmd->cap = DEFAULT_NUM_ARG;
 }
 
-void initCmdArgv(struct Cmd* cmd) {
-  cmd->argv = (char**) malloc(sizeof(char*) * DEFAULT_NUM_ARG);
-  for ( int i = 0 ; i < cmd->cap ; ++i ) {
-    cmd->argv[i] = NULL;
-  }
+void initCmdArgv(struct Cmd* cmd, struct arena* a) {
+    cmd->argv = arena_alloc(a, DEFAULT_NUM_ARG * sizeof(char*));
+    if (cmd->argv == NULL) {
+        perror("Not enough memory at initCmdArgv");
+        return;
+    }
+
+    for ( size_t i = 0 ; i < cmd->cap ; ++i ) {
+        cmd->argv[i] = NULL;
+    }
 }
 
-void CmdArgvStrMalloc(char** current_argv) {
-    *current_argv = (char*)malloc(DEFAULT_STR_ALLOC);
+int cmdArgvGrow(struct Cmd* cmd, struct arena* a) {
+    size_t old = cmd->cap;
+    size_t new = old * 2;
+
+    char** v = arena_alloc(a, sizeof(char*) * new);
+    if (!v) return -1;
+
+    memcpy(v, cmd->argv, sizeof(char*) * old);
+    memset(v + old, 0, sizeof(char*) * (new - old));
+
+    cmd->argv = v;
+    cmd->cap  = new;
+    return 0;
 }
 
 struct Cmd* createCmd() {
   struct Cmd* cmd = (struct Cmd*)malloc(sizeof(struct Cmd));
   initCmd(cmd);
   return cmd;
-}
-
-// return 0 if success
-ssize_t cmdArgvRealloc(struct Cmd* cmd) {
-  size_t old_cap = cmd->cap;
-  size_t new_cap = old_cap * 2;
-  char** temp = realloc(cmd->argv, new_cap * sizeof(char*));
-  if (temp == NULL) {
-    freeCmd(cmd);
-    errno = ENOMEM;
-    return -1;
-  }
-  else {
-    cmd->argv = temp;
-    for ( int i = old_cap ; i < new_cap ; ++i ) {
-        cmd->argv[i] = NULL;
-    }
-    cmd->cap = new_cap;
-  }
-  return 0;
-}
-
-void freeCmd(struct Cmd* cmd) {
-  for ( int i = 0 ; i < cmd->argc ; ++i ) {
-    free(cmd->argv[i]);
-  }
-  free(cmd->argv);
 }
 
 const char built_in_commands[NUM_COMMAND][DEFAULT_STR_ALLOC] = {
@@ -92,9 +81,28 @@ int isDelimiter(char ch) {
     return 0;
 }
 
+static int push_token(struct Cmd* cmd, struct arena* a,
+                      const char* token, int token_len) {
+    if (token_len <= 0) return 0;
 
+    // TODO: grow argv (選 A 或 B)
+    if (cmd->argc + 1 >= cmd->cap) {
+        // 如果 cmd->argv 也改 arena：cmdArgvGrow_arena(cmd,a)
+        if (cmdArgvGrow(cmd, a) < 0) return -1;
+    }
 
-ssize_t tokenize(char* str, struct Cmd* cmd) {
+    char* mem = arena_alloc(a, (size_t)token_len + 1);
+    if (!mem) return -1;
+
+    memcpy(mem, token, (size_t)token_len);
+    mem[token_len] = '\0';
+
+    cmd->argv[cmd->argc++] = mem;
+    cmd->argv[cmd->argc] = NULL;
+    return 0;
+}
+
+ssize_t tokenize(char* str, struct Cmd* cmd, struct arena* a) {
     int str_index = 0;
     int token_index = 0;
     int single_quote_last = 0;
@@ -103,20 +111,17 @@ ssize_t tokenize(char* str, struct Cmd* cmd) {
     while (ch != '\0') {
         if (ch == ' ') {
             if (cmd->argc + 1 >= cmd->cap) {    // + 1 for null terminator
-                ssize_t ret = cmdArgvRealloc(cmd);
+                int ret = cmdArgvGrow(cmd, a);
                 if (ret != 0) {
-                    freeCmd(cmd);
-                    errno = ENOMEM;
                     return -1;
                 }
             }
             token[token_index] = '\0';
-            token_index = 0;
             if (!single_quote_last) {
-                CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
-                strcpy(cmd->argv[cmd->argc++], token);
+                if (push_token(cmd, a, token, token_index) < 0) return -1;
                 memset(token, 0, sizeof(token));
             }
+            token_index = 0;
             // skip white space
             ch = str[str_index++];
             while (ch == ' ') {
@@ -148,10 +153,9 @@ ssize_t tokenize(char* str, struct Cmd* cmd) {
             }
             str_index++;
             token[token_index] = '\0';
-            token_index = 0;
-            CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
-            strcpy(cmd->argv[cmd->argc++], token);
+            if (push_token(cmd, a, token, token_index) < 0) return -1;
             memset(token, 0, sizeof(token));
+            token_index = 0;
             single_quote_last = 1;
         }
         else {
@@ -160,9 +164,9 @@ ssize_t tokenize(char* str, struct Cmd* cmd) {
         ch = str[str_index++];
     }
     if (!single_quote_last) {
-        CmdArgvStrMalloc(&cmd->argv[cmd->argc]);
-        strcpy(cmd->argv[cmd->argc++], token);
+        if (push_token(cmd, a, token, token_index) < 0) return -1;
     }
+    return 0;
 }
 
 static void chomp_newline(char *s) {
@@ -227,7 +231,8 @@ char* readCommand(FILE* stream) {
   char* cmd = NULL;
   size_t cap = 0;
 
-  ssize_t r = my_getline(&cmd, &cap, stream);
+  // ssize_t r = my_getline(&cmd, &cap, stream);
+  ssize_t r = getline(&cmd, &cap, stream);
   if (r == -1) {   // EOF or error
     free(cmd);
     return NULL;
@@ -314,7 +319,6 @@ char* find_path_executable(char* path, char* type_arg) {
 }
 
 int run_process(struct Cmd* cmd) {
-    char** exe_argv = cmd->argv;
     pid_t pid = fork();
     // child
     if (pid == 0) {
@@ -350,9 +354,11 @@ int changeDir(char* destDir) {
 
 /* main */
 
-int main(int argc, char *argv[]) {
+int main() {
   // Flush after every printf
   setbuf(stdout, NULL);
+  struct arena a;
+  arena_init(&a);
 
   // TODO: Uncomment the code below to pass the first stage
   while (1) {
@@ -361,11 +367,12 @@ int main(int argc, char *argv[]) {
     char* cmd_str = readCommand(stdin);
     if (!cmd_str) return 0;
     chomp_newline(cmd_str);
-    struct Cmd* cmd = createCmd();
-    initCmdArgv(cmd);
+    struct Cmd cmd;
+    initCmd(&cmd);
+    initCmdArgv(&cmd, &a);
     // tokenize(cmd_str, " ", cmd);
-    tokenize(cmd_str, cmd);
-    char* exe_name = cmd->argv[0];
+    tokenize(cmd_str, &cmd, &a);
+    char* exe_name = cmd.argv[0];
 
     /* get PATH */
     char* path = getenv("PATH");
@@ -383,7 +390,7 @@ int main(int argc, char *argv[]) {
         }
         char* full_path = find_path_executable(path_copy, exe_name);
         if (full_path) {
-            run_process(cmd); 
+            run_process(&cmd); 
             free(full_path);
         }
         else {
@@ -392,18 +399,18 @@ int main(int argc, char *argv[]) {
     }
     else {
       if (isExit(exe_name)) {
-        freeCmd(cmd);
+        free(cmd_str);
         break;
       }
       else if (isEcho(exe_name)) {
-        for ( int num_arg = 1 ; num_arg < cmd->argc-1 ; num_arg++ ) {
-          printf("%s ", cmd->argv[num_arg]);
+        for ( size_t num_arg = 1 ; num_arg < cmd.argc-1 ; num_arg++ ) {
+          printf("%s ", cmd.argv[num_arg]);
         }
-        printf("%s\n", cmd->argv[cmd->argc-1]);
+        printf("%s\n", cmd.argv[cmd.argc-1]);
       }
       else if (isType(exe_name)) {
-        char* type_arg = cmd->argv[1];
-        if (cmd->argc >= 2) {
+        char* type_arg = cmd.argv[1];
+        if (cmd.argc >= 2) {
           if (isBuiltinCommand(type_arg)) {
             printf("%s is a shell builtin\n", type_arg);
           }
@@ -439,14 +446,15 @@ int main(int argc, char *argv[]) {
       }
       else if (isCd(exe_name)) {
         // currently suppose argc == 2
-        if (changeDir(cmd->argv[1]) == -1) {
-            printf("cd: %s: No such file or directory\n", cmd->argv[1]);
+        if (changeDir(cmd.argv[1]) == -1) {
+            printf("cd: %s: No such file or directory\n", cmd.argv[1]);
         }
       }
     }
+    arena_reset(&a);
     free(cmd_str);
-    freeCmd(cmd);
   }
+  arena_destroy(&a);
 
   return 0;
 }

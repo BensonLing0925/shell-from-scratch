@@ -1,6 +1,6 @@
 CC = gcc
 
-CFLAGS   = -std=c11 -Wall -Wextra -O0 -g
+CFLAGS   = -Wall -Wextra -O0 -g
 CPPFLAGS =
 
 ifeq ($(DEBUG),1)
@@ -10,7 +10,7 @@ CPPFLAGS += -DNDEBUG
 endif
 
 TARGET = arena_test
-SRCS   = arena.c arena_test.c
+SRCS   = arena.c main_arena.c
 OBJS   = $(SRCS:.c=.o)
 
 all: $(TARGET)
