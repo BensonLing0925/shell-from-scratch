@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <fcntl.h>
 #include <sys/wait.h>
 
 #include "arena.h"
@@ -367,16 +368,60 @@ int push_argv(struct Cmd* cmd, struct arena* a, char* text) {
     if (cmd->argc + 1 >= cmd->cap ) {
         if (cmdArgvGrow(cmd, a) < 0) return -1;
     }
-    size_t n = strlen(text);
     cmd->argv[cmd->argc++] = text;
     cmd->argv[cmd->argc] = NULL;
     return 0;
 }
 
+/*
+enum RedirType {
+    R_IN, R_OUT, R_OUT_APPEND,
+    R_ERR, R_ERR_APPEND, R_NONE
+};
+
+struct Redir {
+    int fd;
+    enum RedirType rd_type;
+    const char* path;
+};
+
+enum TokenType {
+    TOK_WORD, TOK_REDIR,
+    TOK_PIPE, TOK_NONE
+};
+
+struct Token {
+    enum TokenType tok_type;
+    enum RedirType rd_type;
+    int fd;
+    char* text;
+};
+*/
+
 static int parse_toklist(struct Cmd* cmd, struct TokenList* toklist, struct arena* a) {
     for ( size_t i = 0 ; i < toklist->ntoks ; ++i ) {
-        if (toklist->tokens[i])
+        struct Token current_token = toklist->tokens[i];
+        if (current_token.tok_type == TOK_WORD) {
+            if (cmd->argc + 1 >= cmd->cap)
+                if (cmdArgvGrow(cmd, a) < 0) return -1;
+            cmd->argv[cmd->argc++] = current_token.text;
+        }
+        else if (current_token.tok_type == TOK_REDIR) {
+            if (cmd->nrds >= cmd->rd_cap)
+                if (cmdRedirGrow(cmd, a) < 0) return -1;
+            cmd->rds[cmd->nrds].fd = current_token.fd;
+            cmd->rds[cmd->nrds].rd_type = current_token.rd_type;
+            i++;
+            struct Token next_token = toklist->tokens[i];
+            if (next_token.tok_type != TOK_WORD) {
+                // temporarily print out error message
+                printf("A WORD should be right after REDIRECT operator\n");
+                return -1;
+            }
+            cmd->rds[cmd->nrds++].path = next_token.text;
+        }
     }
+    return 0;
 }
 
 static void chomp_newline(char *s) {
@@ -528,10 +573,49 @@ char* find_path_executable(char* path, char* type_arg) {
     return NULL;
 }
 
+static int open_for_redir(const struct Redir* r) {
+    int flags = 0;
+    mode_t mode = 0644;
+    switch (r->rd_type) {
+        case R_IN:
+            flags = O_RDONLY;
+            break;
+        case R_OUT:
+            flags = O_WRONLY | O_CREAT | O_TRUNC;
+            break;
+        case R_OUT_APPEND:
+            flags = O_WRONLY | O_CREAT | O_APPEND;
+            break;
+        case R_ERR:
+            flags = O_WRONLY | O_CREAT | O_TRUNC;
+            break;
+        case R_ERR_APPEND:
+            flags = O_WRONLY | O_CREAT | O_APPEND;
+            break;
+        default:
+            errno = EINVAL;
+            return -1;
+    }
+    return open(r->path, flags, mode);
+}
+
 int run_process(struct Cmd* cmd) {
     pid_t pid = fork();
     // child
     if (pid == 0) {
+        for ( size_t i = 0 ; i < cmd->nrds ; ++i ) {
+            int new_fd = open_for_redir(&cmd->rds[i]);
+            if (new_fd < 0) {
+                perror("open");
+                _exit(1);
+            }
+            // dup2(src, dst): 把 new_fd 複製到「要被重導向的 fd」
+            if (dup2(new_fd, cmd->rds[i].fd) < 0) {
+                perror("dup2");
+                _exit(1);
+            }
+            close(new_fd);
+        }
         execvp(cmd->argv[0], cmd->argv);
         perror("execvp");
         _exit(127);
@@ -580,6 +664,7 @@ int main() {
     struct Cmd cmd;
     initCmd(&cmd);
     initCmdArgv(&cmd, &a);
+    initCmdRedir(&cmd, &a);
     struct TokenList toklist;
     toklist_init(&toklist);
     tokenize(&toklist, cmd_str, &a);
@@ -631,10 +716,13 @@ int main() {
         break;
       }
       else if (isEcho(exe_name)) {
+        run_process(&cmd);
+        /*
         for ( size_t num_arg = 1 ; num_arg < cmd.argc-1 ; num_arg++ ) {
           printf("%s ", cmd.argv[num_arg]);
         }
         printf("%s\n", cmd.argv[cmd.argc-1]);
+        */
       }
       else if (isType(exe_name)) {
         char* type_arg = cmd.argv[1];
