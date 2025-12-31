@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <sys/wait.h>
 #include <readline/readline.h>
@@ -648,18 +649,57 @@ int changeDir(char* destDir) {
 }
 
 /* autocompletion */
-
-static char* builtin_gen(const char* text, int state) {
+static char* cmd_gen(const char* text, int state) {
     static int i;
     static size_t len;
+
+    static char* path_copy;
+    static char* save = NULL;
+    static char* dir;
+    static DIR* dp;
+
+    // if initial state
     if (state == 0) {
         i = 0;
         len = strlen(text);
+        if (dp) closedir(dp);
+        free(path_copy);
+        path_copy = NULL;
+        save = NULL;
+        dir = NULL;
+        const char* p = getenv("PATH");
+        if (p) path_copy = strdup(p);
     }
-    for ( ; built_in_commands[i] ; ++i ) {
-        if (strncmp(built_in_commands[i], text, len) == 0) {
-            return strdup(built_in_commands[i++]);
+    while (built_in_commands[i]) {
+        const char* s = built_in_commands[i++];
+        if (strncmp(s, text, len) == 0) return strdup(s);
+    }
+    while (1) {
+
+        if (!path_copy) return NULL;
+        if (!dp) {
+            dir = strtok_r(dir ? NULL : path_copy, ":", &save);
+            if (!dir) return NULL;
+
+            dp = opendir(dir);
+            if (!dp) continue;
         }
+
+        struct dirent* ent;
+
+        while ((ent = readdir(dp)) != NULL) {
+            const char* name = ent->d_name;
+            if (name[0] == '.') continue; // skip all invisible file(which all start with . in this case)
+            if (strncmp(name, text, len) != 0) continue;
+
+            char full_path[PATH_MAX] = {0};
+            snprintf(full_path, sizeof(full_path), "%s/%s", dir, name);
+            if (access(full_path, X_OK) == 0) {
+                return strdup(name); 
+            }
+        }
+        closedir(dp);
+        dp = NULL; // scan the next directory
     }
     return NULL;
 }
@@ -667,7 +707,7 @@ static char* builtin_gen(const char* text, int state) {
 static char** my_completion(const char* text, int start, int end) {
     (void)end;
     if (start == 0) {
-        return rl_completion_matches(text, builtin_gen);
+        return rl_completion_matches(text, cmd_gen);
     }
     return NULL;
 }
