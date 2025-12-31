@@ -823,15 +823,12 @@ int main() {
         }
       }
       else if (isPwd(exe_name)) {
-        run_process(&cmd);
-        /*
         char cwd[PATH_MAX];
         if (getcwd(cwd, sizeof(cwd)) == NULL) {
             perror("getcwd");
             return -1;
         }
         printf("%s\n", cwd);
-        */
       }
       else if (isCd(exe_name)) {
         // currently suppose argc == 2
