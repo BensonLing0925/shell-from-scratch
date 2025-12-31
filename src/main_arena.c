@@ -7,6 +7,8 @@
 #include <ctype.h>
 #include <fcntl.h>
 #include <sys/wait.h>
+#include <readline/readline.h>
+#include <readline/history.h>
 
 #include "arena.h"
 
@@ -174,12 +176,13 @@ struct Cmd* createCmd() {
   return cmd;
 }
 
-const char built_in_commands[NUM_COMMAND][DEFAULT_STR_ALLOC] = {
+const char* built_in_commands[] = {
   "exit",
   "echo",
   "type",
   "pwd",
-  "cd"
+  "cd",
+  NULL
 };
 
 /* string manipulation utilities */
@@ -482,17 +485,15 @@ ssize_t my_getline(char **lineptr, size_t *n, FILE *stream) {
 
 }
 
-char* readCommand(FILE* stream) {
-  char* cmd = NULL;
-  size_t cap = 0;
-
+char* readCommand() {
   // ssize_t r = my_getline(&cmd, &cap, stream);
-  ssize_t r = getline(&cmd, &cap, stream);
-  if (r == -1) {   // EOF or error
-    free(cmd);
+  // ssize_t r = getline(&cmd, &cap, stream);
+  char* line = readline("$ ");
+  if (!line) {
     return NULL;
   }
-  return cmd; // caller frees
+  if (*line) add_history(line);
+  return line; // caller frees
 }
 
 /* command verifications */
@@ -646,19 +647,48 @@ int changeDir(char* destDir) {
     return 0;
 }
 
+/* autocompletion */
+
+static char* builtin_gen(const char* text, int state) {
+    static int i;
+    static size_t len;
+    if (state == 0) {
+        i = 0;
+        len = strlen(text);
+    }
+    for ( ; built_in_commands[i] ; ++i ) {
+        if (strncmp(built_in_commands[i], text, len) == 0) {
+            return strdup(built_in_commands[i++]);
+        }
+    }
+    return NULL;
+}
+
+static char** my_completion(const char* text, int start, int end) {
+    (void)end;
+    if (start == 0) {
+        return rl_completion_matches(text, builtin_gen);
+    }
+    return NULL;
+}
+
 /* main */
 
 int main() {
   // Flush after every printf
   setbuf(stdout, NULL);
+
+  rl_bind_key('\t', rl_complete);
+  rl_attempted_completion_function = my_completion;
+
   struct arena a;
   arena_init(&a);
 
   // TODO: Uncomment the code below to pass the first stage
   while (1) {
-    printf("$ ");
+    // printf("$ ");
 
-    char* cmd_str = readCommand(stdin);
+    char* cmd_str = readCommand();
     if (!cmd_str) return 0;
     chomp_newline(cmd_str);
     struct Cmd cmd;

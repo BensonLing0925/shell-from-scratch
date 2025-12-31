@@ -2,6 +2,7 @@ CC = gcc
 
 CFLAGS   = -Wall -Wextra -O0 -g
 CPPFLAGS =
+LDLIBS  += -lreadline -lhistory -lncurses
 
 ifeq ($(DEBUG),1)
 CPPFLAGS += -DARENA_DEBUG
@@ -17,7 +18,7 @@ OBJS   = $(SRCS:.c=.o)
 all: $(TARGET)
 
 $(TARGET): $(OBJS)
-	$(CC) $(OBJS) -o $@
+	$(CC) $(OBJS) -o $@ $(LDLIBS)
 
 %.o: %.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
